@@ -1,0 +1,252 @@
+Note that '$1' means the first argument to your script.
+'$*' means "all the arguments together
+'$#' means "how many arguments are there?" 
+
+IF - ELSE
+----------------------------
+if [ $? -eq 0 ] ; then
+	print we are okay
+else
+	print something failed
+fi
+
+CASE
+----------------------------
+The variable being checked can be a string, not just a number 
+There is no "fall through" with ;;. You hit only one set of commands.. UNLESS you use ";&" instead of ";;' 
+To make up for no 'fall through', you can 'share' variable states 
+You can use WILDCARDS to match strings 
+
+echo input yes or no
+read  answer
+case $answer in
+	yes|Yes|y)
+		echo got a positive answer
+		# the following ';;' is mandatory for every set
+		# of comparative xxx)  that you do
+		;;
+	no)
+		echo got a 'no'
+		;;
+	q*|Q*)
+		#assume the user wants to quit
+		exit
+		;;
+		
+	*)
+		echo This is the default clause. we are not sure why or
+		echo what someone would be typing, but we could take
+		echo action on it here
+		;;
+esac
+
+WHILE
+------------------------------
+keeplooping=1;
+while [[ $keeplooping -eq 1 ]] ; do
+	read quitnow
+	if [[ "$quitnow" = "yes" ]] ; then
+		keeplooping=0
+	fi
+	if [[ "$quitnow" = "q" ]] ; then
+		break;
+	fi
+done
+
+UNTILE
+-------------------------------
+The difference between them is that 'while' implies looping while something remains true.
+'until', implies looping until something false, becomes true 
+
+until [[ $stopnow -eq 1 ]] ; do
+	echo just run this once
+	stopnow=1;
+	echo we should not be here again.
+done
+
+FOR
+-------------------------------
+
+for var in one two three ; do
+	echo $var
+done
+
+
+list="one two three"
+for var in $list ; do
+	echo $var
+	# Note: Changing this does NOT affect the loop items
+	list="nolist"
+done
+
+BRACES
+------------------------------
+two=2
+print one$twothree # there is no such variable twothree
+print one${two}three # $two is a variable
+
+ARRAY
+----------------------------
+# This is an OPTIONAL way to quickly null out prior values
+set -A array
+#
+array[1]="one"
+array[2]="two"
+array[3]="three"
+three=3
+
+print ${array[1]}
+print ${array[2]}
+print ${array[3]}
+print ${array[three]}  #This is interpreted as array[3]
+
+SPECIAL VARIABLES
+------------------------------
+PWD - always the current directory 
+RANDOM - a different number every time you access it 
+$$ - the current process id (of the script, not the user's shell) 
+PPID - the "parent process"s ID. (BUT NOT ALWAYS, FOR FUNCTIONS) 
+$? - exit status of last command run by the script 
+PS1 - your "prompt". "PS1='$PWD:> '" is interesting. 
+$1 to $9 - arguments 1 to 9 passed to your script or function (you can actually have higher, but you need to use braces for those) 
+
+
+
+$ PATHNAME=/path/to/file
+
+$ print ${PATHNAME#*/}
+path/to/file
+$ print ${PATHNAME##*/}
+file
+
+$ print ${PATHNAME%/*}
+/path/to
+$ print ${PATHNAME%%/*}
+(nothing! It stripped away the entire path! :)
+
+Ksh and POSIX utilities 
+-------------------------------
+cut
+join
+||comm||
+
+comm -1 file1 file2
+"Do not show me lines ONLY in file1." Which is the same thing as saying "Show me lines that are ONLY in file2", and also "Show me lines that are in BOTH file1 and file2". 
+
+||fmt||
+takes some informational text file, and word-wraps it nicely to fit within the confines of a fixed-width terminal.
+
+||grep and egrep||
+
+||sed||
+
+||awk||
+
+FUNCTION
+---------------------------
+
+A trivial function
+
+printmessage() {
+	echo "Hello, this is the printmessage function"
+}
+
+printmessage
+
+You call a function in ksh, by pretending it is a regular command, as shown above. Just have the function name as the first part of your line. Or any other place commands go. For example
+
+$echo The message is: `printmessage`
+
+Remember: Just like its own separate shellscript. Which means if you access "$1" in a function, it is the first argument passed in to the function, not the shellscript. 
+
+CRITICAL ISSUE: exit vs return
+----------------------------------
+'exit' will exit the entire script, whether it is in a function or not.
+'return' will just quit the function. Like 'exit', however, it can return the default "sucess" value of 0, or any number from 1-255 that you specify.
+
+
+CRITICAL ISSUE: "scope" for function variables!
+------------------------------------------------
+==> Be warned: Functions act almost just like external scripts... except that by default, all variables are SHARED between the same ksh process! If you change a variable name inside a function.... that variable's value will still be changed after you have left the function!!
+#!/bin/sh
+# Acts the same with /bin/sh, or /bin/ksh, or /bin/bash
+subfunc(){
+        echo sub: var starts as $var
+        var=2
+        echo sub: var is now $var
+}
+var=1
+echo var starts as $var, before calling function '"subfunc"'
+subfunc  # calls the function
+echo var after function is now $var
+
+==> To avoid this behaviour, and give what is known as "local scope" to a variable, you can use the typeset command, to define a variable as local to the function. Ex. typeset var
+
+#!/bin/ksh
+# You must use a modern sh like /bin/ksh, or /bin/bash for this
+subfunc(){
+	typeset var
+        echo sub: var starts as $var '(empty)'
+        var=2
+        echo sub: var is now $var
+}
+var=1
+echo var starts as $var, before calling function '"subfunc"'
+subfunc  # calls the function
+echo var after function is now $var
+
+==> Another exception to this is if you call a function in the 'background', or as part of a pipe (like echo val | function )
+This makes the function be called in a separate ksh process, which cannot dynamically share variables back to the parent shell. Another way that this happens, is if you use backticks to call the function. This treats the function like an external call, and forks a new shell. This means the variable from the parent will not be updated. Eg: 
+
+func() {
+        newval=$(($1 + 1))
+        echo $newval
+        echo in func: newval ends as $newval
+}
+newval=1
+echo newval in main is $newval
+output=`func $newval`
+func $newval
+echo output is : $output
+echo newval finishes in main as $newval
+
+
+BUILT-IN FUNCTIONS
+---------------------------------------
+||typeset||
+
+||Read and Set||
+Note that if you want to access "double-digit" arguments, you cannot use "$10". it will get interpreted as "$1,""0". To access argument #10 and higher you must explicitly define the limits of the variable string, with braces: 
+
+echo ${10}
+
+||Test Fucntion||
+if [[ $? -ne 0 ]] ; then echo status is bad ; fi
+if [[ "$var" != "good" ]] ; then echo var is not good ; fi
+if [[ ! -f /file/name ]] ; then echo /file/name is not there ; fi
+if [[ ! -d /dir/name ]] ; then echo /dir/name is not a directory ; fi
+
+
+wildcards in test
+Please note that [[]] is a special built-in version of test, that is almost, but not 100%, like the standard []. 
+
+if [[ a* == "astring" ]] ; then echo this does not work ; fi
+if [[ "astring" == "a*" ]] ; then echo this does not work ; fi
+if [[ "astring" == 'a*' ]] ; then echo this does not work ; fi
+if [[ "astring" == a* ]] ; then echo this works ; fi
+if [[ "astring" = a* ]] ; then echo this works ; fi
+
+||Built-in math||
+four=$((2 + 2))
+eight=$(($four + 4))
+print $(($four * $eight))
+# Inside (()), the $ is optional, so the following works...
+# but you might want to keep them for assorted reasons..
+print $((four * eight))
+
+# even hex to decimal conversions
+print $((0xff))
+printf "%x\n" 255    #this prints out "ff"
+printf "%.4x\n" 255  #or if you need a fixed field width number use this
+
+Warning #1: Some versions of ksh allow you to use floating point with $(()). Most do NOT. Warning #2: ksh is very strict about what goes inside the (( )). Every variable you use must have a value, and it must be a numeric value. Otherwise, ksh will most likely treat that line in your script as a failed function call. 
